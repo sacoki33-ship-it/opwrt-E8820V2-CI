@@ -26,7 +26,7 @@ env:
   UPLOAD_BIN_DIR: false
   UPLOAD_FIRMWARE: true
   UPLOAD_COWTRANSFER: false
-  UPLOAD_WETRANSFER: true
+  UPLOAD_WETRANSFER: false
   UPLOAD_RELEASE: false
   TZ: Asia/Shanghai
 
@@ -59,7 +59,16 @@ jobs:
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
-        
+
+    - name: Fix m4 SIGSTKSZ issue
+      working-directory: /workdir/openwrt
+      run: |
+        # تحميل ملف التصحيح لوضعه في مجلد m4
+        mkdir -p tools/m4/patches
+        wget -q https://raw.githubusercontent.com/keyfour/openwrt/2722d51c5cf6a296b8ecf7ae09e46690403a6c3d/tools/m4/patches/011-fix-sigstksz.patch -O tools/m4/patches/011-fix-sigstksz.patch
+        # التأكد من أن الملف تم تحميله
+        ls -la tools/m4/patches/
+
     - name: Load custom feeds
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
