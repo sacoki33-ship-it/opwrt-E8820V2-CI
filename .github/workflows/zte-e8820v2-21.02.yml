@@ -1,79 +1,102 @@
-name: zte-e8820v2-21.02
+name: Build OpenWrt v21.02.7 ZTE E8820V2
 
 on:
-  repository_dispatch:
   workflow_dispatch:
 
-env:
-  REPO_URL: https://github.com/siwind/openwrt.git
-  REPO_BRANCH: openwrt-21.02
-  CONFIG_FILE: zte-e8820v2-21.02.config
-  TZ: Asia/Shanghai
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: false
+
     steps:
-    - name: Checkout
+    - name: Checkout this repo
       uses: actions/checkout@v4
-
-    - name: Initialization environment
-      env:
-        DEBIAN_FRONTEND: noninteractive
+      
+    - name: Set Build Date & Timezone
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
-        sudo add-apt-repository universe -y
-        sudo -E apt-get -qq update
-        sudo -E apt-get -qq install build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libz-dev patch python3 unzip zlib1g-dev lib32gcc-s1 libc6-dev-i386 subversion flex uglifyjs git-core gcc-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx libelf-dev autoconf automake libtool autopoint device-tree-compiler g++-multilib antlr3 gperf wget curl swig rsync
-        sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
-        sudo ln -sf /usr/bin/python3 /usr/bin/python
+        sudo timedatectl set-timezone "Asia/Jakarta"
+        echo "BUILD_DATE=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+        echo "BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
 
-    - name: Clone source code
-      working-directory: /workdir
+    - name: Clean & Install prerequisites
       run: |
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        # ✅ نسخ ملف DTS الجاهز والمجرب من ROOTQb
-        wget -q https://raw.githubusercontent.com/ROOTQb/openwrt/master/target/linux/ramips/dts/mt7621_zte_e8820v2.dts -O openwrt/target/linux/ramips/dts/mt7621_zte_e8820v2.dts
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        sudo docker rmi $(docker image ls -q) 2>/dev/null || true
+        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc
+        sudo -E apt-get -y purge azure-cli google-cloud-cli google-chrome-stable firefox powershell dotnet-sdk*
+        sudo -E apt-get update
+        sudo -E apt-get -y install build-essential clang flex bison g++ gawk \
+        gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+        python3-setuptools rsync swig unzip zlib1g-dev file wget ccache
+        sudo -E apt-get autoremove --purge -y
+        sudo -E apt-get clean
+
+    - name: Clone OpenWrt v21.02.7
+      run: |
+        git clone https://github.com/openwrt/openwrt.git
+        cd openwrt
+        git pull
+        git checkout v21.02.7
+
+    - name: Cache dl and build_dir
+      uses: actions/cache@v4
+      with:
+        path: |
+          openwrt/dl
+          openwrt/staging_dir
+        key: ${{ runner.os }}-openwrt-21.02.7-${{ hashFiles('**/*.config') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-21.02.7-
 
     - name: Update feeds
-      run: cd openwrt && ./scripts/feeds update -a
-
-    - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a
-
-    - name: Load custom configuration
       run: |
-        [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
-    - name: Download package
+    - name: Apply custom files (Overwrite Config, DTS, MK, LED & Network)
       run: |
+        set -e
+        # ✅ استخدام ملف الإعدادات الخاص بك (في المجلد الرئيسي)
+        cp zte-e8820v2-21.02.config openwrt/.config
+        
+        # نسخ ملفات DTS و mt7621.mk من مجلد custom
+        cp custom/mt7621.mk openwrt/target/linux/ramips/image/mt7621.mk
+        cp custom/mt7621_zte_e8820v2.dts openwrt/target/linux/ramips/dts/mt7621_zte_e8820v2.dts
+        
+        # نسخ ملفات الشبكة والـ LEDs
+        cp custom/01_leds openwrt/target/linux/ramips/mt7621/base-files/etc/board.d/01_leds
+        cp custom/02_network openwrt/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
+        
         cd openwrt
         make defconfig
-        make download -j8
-
-    - name: Compile the firmware
-      id: compile
+        
+    - name: Download Package Source (Pre-download)
       run: |
         cd openwrt
-        make -j$(nproc) || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        make download -j$(nproc)
+        find dl -size 0 -exec rm -f {} \;
 
-    - name: Organize files
-      if: steps.compile.outputs.status == 'success'
+    - name: Build firmware
       run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        cd openwrt
+        JOBS=$(nproc || echo 2)
+        echo "Using $JOBS parallel jobs"
+        export CCACHE_DIR="$HOME/.ccache"
+        mkdir -p "$CCACHE_DIR"
+        echo "Clearing old ccache..."
+        ccache -C || true
+        ccache -M 2G || true
+        time make -j"$JOBS" || make -j1 V=s
+        echo "✓ Build finished"
 
-    - name: Upload firmware
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
-      if: steps.compile.outputs.status == 'success'
       with:
-        name: OpenWrt_firmware${{ env.DEVICE_NAME }}
-        path: ${{ env.FIRMWARE }}
+        name: OpenWrt_21.02.7_ZTE_E8820V2_${{ env.BUILD_DATE }}
+        path: openwrt/bin
