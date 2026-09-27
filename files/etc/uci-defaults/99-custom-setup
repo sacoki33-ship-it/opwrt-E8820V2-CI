@@ -1,0 +1,30 @@
+#!/bin/sh
+# سكربت الإعداد الأولي
+
+# تعيين IP ثابت
+uci set network.lan.ipaddr='192.168.1.1'
+uci set network.lan.netmask='255.255.255.0'
+
+# تعطيل DHCP
+uci set dhcp.lan.ignore='1'
+uci set dhcp.lan.dhcpv4='disabled'
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ra='disabled'
+uci set dhcp.@dnsmasq[0].ignore='1'
+
+# تعطيل جدار الحماية (وضع الجسر الشفاف)
+uci set firewall.@defaults[0].input='ACCEPT'
+uci set firewall.@defaults[0].output='ACCEPT'
+uci set firewall.@defaults[0].forward='ACCEPT'
+uci set firewall.@defaults[0].syn_flood='0'
+uci set firewall.@defaults[0].disable_ipv6='1'
+
+# حذف جميع zones و forwardings لضمان عدم الحجب
+while uci -q delete firewall.@zone[0]; do :; done
+while uci -q delete firewall.@forwarding[0]; do :; done
+
+uci commit network
+uci commit dhcp
+uci commit firewall
+
+exit 0
