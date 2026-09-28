@@ -32,7 +32,6 @@
             label = "white:system";
             gpios = <&gpio 29 GPIO_ACTIVE_LOW>;
         };
-
         power {
             label = "white:power";
             gpios = <&gpio 31 GPIO_ACTIVE_LOW>;
@@ -41,7 +40,6 @@
 
     keys {
         compatible = "gpio-keys";
-
         reset {
             label = "reset";
             gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
@@ -69,23 +67,20 @@
                 reg = <0x0 0x30000>;
                 read-only;
             };
-
             partition@30000 {
                 label = "u-boot-env";
                 reg = <0x30000 0x10000>;
                 read-only;
             };
-
             factory: partition@40000 {
                 label = "factory";
                 reg = <0x40000 0x10000>;
                 read-only;
             };
-
             partition@50000 {
                 compatible = "openwrt,uimage", "denx,uimage";
                 label = "firmware";
-                reg = <0x50000 0xfa0000>;
+                reg = <0x50000 0xfb0000>;
             };
         };
     };
