@@ -114,8 +114,8 @@ youhua,wr1200js)
 	ucidef_set_led_netdev "internet" "INTERNET" "green:wan" "wan"
 	;;
 zte,e8820v2)
-	ucidef_set_led_netdev"sys" "SYS_LED" "$boardname:white:sys""eth0" "tx rx"
-	ucidef_set_led_default"power" "POWER_LED" "$boardname:white:power""1"
+	ucidef_set_led_netdev "sys" "SYS_LED" "white:system" "eth0" "tx rx"
+	ucidef_set_led_timer "power" "POWER_LED" "white:power" "100" "8000"
 	;;
 esac
 
