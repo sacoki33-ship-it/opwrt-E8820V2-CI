@@ -47,6 +47,7 @@ jobs:
         cp zte-e8820v2-19.07.config openwrt/.config
         cp custom/mt7621.mk openwrt/target/linux/ramips/image/mt7621.mk
         cp custom/mt7621_zte_e8820v2.dts openwrt/target/linux/ramips/dts/mt7621_zte_e8820v2.dts
+        # ✅ المسار الصحيح لإصدار 19.07 (بدون mt7621)
         cp custom/01_leds openwrt/target/linux/ramips/base-files/etc/board.d/01_leds
         cp custom/02_network openwrt/target/linux/ramips/base-files/etc/board.d/02_network
         cd openwrt
