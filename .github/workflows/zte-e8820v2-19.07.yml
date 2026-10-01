@@ -26,6 +26,11 @@ jobs:
         sudo -E apt-get -y install build-essential clang flex bison g++ gawk \
         gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
         python3-setuptools rsync swig unzip zlib1g-dev file wget ccache
+        # ✅ إضافة Python 2.x (مطلوب لـ OpenWrt 19.07)
+        sudo add-apt-repository universe -y
+        sudo apt-get update
+        sudo apt-get install -y python2.7
+        sudo ln -sf /usr/bin/python2.7 /usr/bin/python2
         sudo -E apt-get autoremove --purge -y
         sudo -E apt-get clean
 
@@ -34,6 +39,13 @@ jobs:
         git clone https://github.com/siwind/openwrt.git
         cd openwrt
         git checkout openwrt-19.07
+
+    - name: Fix m4 SIGSTKSZ issue
+      working-directory: /workdir/openwrt
+      run: |
+        mkdir -p tools/m4/patches
+        wget -q https://raw.githubusercontent.com/keyfour/openwrt/2722d51c5cf6a296b8ecf7ae09e46690403a6c3d/tools/m4/patches/011-fix-sigstksz.patch -O tools/m4/patches/011-fix-sigstksz.patch
+        ls -la tools/m4/patches/
 
     - name: Update feeds
       run: |
@@ -47,7 +59,6 @@ jobs:
         cp zte-e8820v2-19.07.config openwrt/.config
         cp custom/mt7621.mk openwrt/target/linux/ramips/image/mt7621.mk
         cp custom/mt7621_zte_e8820v2.dts openwrt/target/linux/ramips/dts/mt7621_zte_e8820v2.dts
-        # ✅ المسار الصحيح لإصدار 19.07 (بدون mt7621)
         cp custom/01_leds openwrt/target/linux/ramips/base-files/etc/board.d/01_leds
         cp custom/02_network openwrt/target/linux/ramips/base-files/etc/board.d/02_network
         cd openwrt
