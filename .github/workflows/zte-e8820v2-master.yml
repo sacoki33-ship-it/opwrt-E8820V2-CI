@@ -1,0 +1,72 @@
+name: Build OpenWrt Master ZTE E8820V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout this repo
+      uses: actions/checkout@v4
+
+    - name: Set Build Date & Timezone
+      run: |
+        sudo timedatectl set-timezone "Asia/Jakarta"
+        echo "BUILD_DATE=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+
+    - name: Clean & Install prerequisites
+      run: |
+        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc
+        sudo -E apt-get update
+        sudo -E apt-get -y install build-essential clang flex bison g++ gawk \
+        gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+        python3-setuptools rsync swig unzip zlib1g-dev file wget ccache
+        sudo -E apt-get autoremove --purge -y
+        sudo -E apt-get clean
+
+    - name: Clone OpenWrt master
+      run: |
+        git clone https://github.com/openwrt/openwrt.git
+        cd openwrt
+        git checkout master
+
+    - name: Update feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Apply custom files
+      run: |
+        set -e
+        cp zte-e8820v2-master.config openwrt/.config
+        cp custom/mt7621.mk openwrt/target/linux/ramips/image/mt7621.mk
+        cp custom/mt7621_zte_e8820v2.dts openwrt/target/linux/ramips/dts/mt7621_zte_e8820v2.dts
+        # ✅ المسار الصحيح لإصدار master
+        cp custom/01_leds openwrt/target/linux/ramips/mt7621/base-files/etc/board.d/01_leds
+        cp custom/02_network openwrt/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
+        cd openwrt
+        make defconfig
+
+    - name: Download Package Source
+      run: |
+        cd openwrt
+        make download -j$(nproc)
+        find dl -size 0 -exec rm -f {} \;
+
+    - name: Build firmware
+      run: |
+        cd openwrt
+        make -j$(nproc) || make -j1 V=s
+        echo "✓ Build finished"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: OpenWrt_Master_ZTE_E8820V2_${{ env.BUILD_DATE }}
+        path: openwrt/bin
